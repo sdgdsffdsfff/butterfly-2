@@ -48,6 +48,8 @@ class Edge {
     });
     this.labelDom = this.drawLabel(this.label);
     this.arrowDom = this.drawArrow(this.arrow);
+
+    this._addEventListener();
   }
   draw(obj) {
     let path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
@@ -127,6 +129,13 @@ class Edge {
     if (this.arrowFinalPosition > 1) {
       this.arrowFinalPosition = 1;
     }
+    if (this.arrowFinalPosition < 0) {
+      this.arrowFinalPosition = 0;
+    }
+    // 防止箭头窜出线条
+    if (1 - this.arrowFinalPosition < ArrowUtil.arrow.length / length) {
+      this.arrowFinalPosition = (length * this.arrowFinalPosition - ArrowUtil.arrow.length) / length;
+    }
     // 贝塞尔曲线是反着画的，需要调整
     if (this.shapeType === 'Bezier') {
       this.arrowFinalPosition = 1 - this.arrowFinalPosition;
@@ -194,6 +203,24 @@ class Edge {
       });
     }
   }
+  _addEventListener() {
+    $(this.dom).on('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._emit('system.link.click', {
+        edge: this
+      });
+      this._emit('events', {
+        type: 'link:click',
+        edge: this
+      });
+
+      this._emit('InnerEvents', {
+        type: 'link:click',
+        data: this
+      });
+    });
+  }
   _create(opts) {
     this.id = _.get(opts, 'id') || this.id;
     this.targetNode = _.get(opts, 'targetNode') || this.targetNode;
@@ -203,6 +230,8 @@ class Edge {
     this._sourceType = _.get(opts, '_sourceType') || this._sourceType;
     this.sourceEndpoint = _.get(opts, 'sourceEndpoint') || this.sourceEndpoint;
     this.type = _.get(opts, 'type') || this.type;
+    _.set(this, 'options.targetNode', _.get(this, 'targetNode.id'));
+    _.set(this, 'options.targetEndpoint', _.get(this, 'targetEndpoint.id'));
     this.redraw();
   }
 }

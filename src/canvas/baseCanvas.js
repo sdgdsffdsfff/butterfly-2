@@ -92,8 +92,6 @@ class BaseCanvas extends Canvas {
     this._dragGroup = null;
 
     // 初始化一些参数
-    this._rootOffsetX = $(this.root).offset().left;
-    this._rootOffsetY = $(this.root).offset().top;
     this._rootWidth = $(this.root).width();
     this._rootHeight = $(this.root).height();
 
@@ -130,6 +128,15 @@ class BaseCanvas extends Canvas {
         endpoints: []
       }
     };
+  }
+
+  updateRootResize() {
+    this._coordinateService._changeCanvasInfo({
+      terOffsetX: $(this.root).offset().left,
+      terOffsetY: $(this.root).offset().top,
+      terWidth: $(this.root).width(),
+      terHeight: $(this.root).height()
+    });
   }
 
   draw(opts, callback) {
@@ -169,7 +176,11 @@ class BaseCanvas extends Canvas {
       }, 20);
     });
     Promise.all([groupPromise, nodePromise, edgePromise]).then(() => {
-      callback && callback();
+      callback && callback({
+        nodes: this.nodes,
+        edges: this.edges,
+        groups: this.groups
+      });
     });
   }
 
@@ -195,7 +206,7 @@ class BaseCanvas extends Canvas {
     }));
     if (this._isExistGroup(_groupObj)) {
       // 后续用新的group代码旧的group
-      console.log(`group:${_groupObj.id} has existed`);
+      console.warn(`group:${_groupObj.id} has existed`);
       return;
     }
     _groupObj.init();
@@ -211,7 +222,16 @@ class BaseCanvas extends Canvas {
   addNodes(nodes, isNotEventEmit) {
     const _canvasFragment = document.createDocumentFragment();
     const container = $(this.wrapper);
-    const result = nodes.map((node) => {
+    const result = nodes.filter((node) => {
+      if (node.group) {
+        let _existGroup = this.getGroup(node.group);
+        if (!_existGroup) {
+          console.warn(`nodeId为${node.id}的节点找不到groupId为${node.group}的节点组，因此无法渲染`);
+          return false;
+        }
+      }
+      return true;
+    }).map((node) => {
       let _nodeObj = null;
       if (node instanceof Node) {
         _nodeObj = node;
@@ -227,7 +247,7 @@ class BaseCanvas extends Canvas {
 
       if (this._isExistNode(_nodeObj)) {
         // 后续用新的node代码旧的node
-        console.log(`node:${_nodeObj.id} has existed`);
+        console.warn(`node:${_nodeObj.id} has existed`);
         return;
       }
 
@@ -242,7 +262,7 @@ class BaseCanvas extends Canvas {
         if (ScopeCompare(_nodeObj.scope, existGroup.scope, _.get(this, 'global.isScopeStrict'))) {
           existGroup._appendNodes([_nodeObj]);
         } else {
-          console.log(`nodeId为${_nodeObj.id}的节点和groupId${existGroup.id}的节点组scope值不符，无法加入`);
+          console.warn(`nodeId为${_nodeObj.id}的节点和groupId${existGroup.id}的节点组scope值不符，无法加入`);
         }
       } else {
         _canvasFragment.appendChild(_nodeObj.dom);
@@ -260,6 +280,17 @@ class BaseCanvas extends Canvas {
       // 节点挂载
       !isNotEventEmit && item.mounted && item.mounted();
     });
+
+    if (result && result.length > 0) {
+      this.emit('system.nodes.add', {
+        nodes: result
+      });
+      this.emit('events', {
+        type: 'nodes:add',
+        nodes: result
+      });
+    }
+
     return result;
   }
 
@@ -325,7 +356,7 @@ class BaseCanvas extends Canvas {
         }
 
         if (!sourceNode || !targetNode) {
-          console.log(`butterflies error: can not connect edge. link sourceNodeId:${link.sourceNode};link targetNodeId:${link.targetNode}`);
+          console.warn(`butterflies error: can not connect edge. link sourceNodeId:${link.sourceNode};link targetNodeId:${link.targetNode}`);
           return;
         }
 
@@ -345,7 +376,7 @@ class BaseCanvas extends Canvas {
         }
 
         if (!sourceEndpoint || !targetEndpoint) {
-          console.log(`butterflies error: can not connect edge. link sourceId:${link.source};link targetId:${link.target}`);
+          console.warn(`butterflies error: can not connect edge. link sourceId:${link.source};link targetId:${link.target}`);
           return;
         }
 
@@ -364,7 +395,7 @@ class BaseCanvas extends Canvas {
             return _result;
           });
           if (_isRepeat) {
-            console.log(`id为${sourceEndpoint.id}-${targetEndpoint.id}的线条连接重复，请检查`);
+            console.warn(`id为${sourceEndpoint.id}-${targetEndpoint.id}的线条连接重复，请检查`);
             return;
           }
         }
@@ -412,7 +443,7 @@ class BaseCanvas extends Canvas {
         const targetNode = this.getNode(link.target);
 
         if (!sourceNode || !targetNode) {
-          console.log(`butterflies error: can not connect edge. link sourceId:${link.source};link targetId:${link.target}`);
+          console.warn(`butterflies error: can not connect edge. link sourceId:${link.source};link targetId:${link.target}`);
           return;
         }
 
@@ -493,21 +524,15 @@ class BaseCanvas extends Canvas {
   removeNode(nodeId, isNotDelEdge, isNotEventEmit) {
     const index = _.findIndex(this.nodes, _node => _node.id === nodeId);
     if (index === -1) {
-      console.log(`找不到id为：${nodeId}的节点`);
+      console.warn(`找不到id为：${nodeId}的节点`);
       return;
     }
 
     // 删除邻近的线条
     const neighborEdges = this.getNeighborEdges(nodeId);
-    if (!isNotDelEdge) {
-      this.edges = this.edges.filter((edge) => {
-        const _edge = _.find(neighborEdges, item => item.id === edge.id);
-        return !_edge;
-      });
 
-      neighborEdges.forEach((item) => {
-        item.destroy(isNotEventEmit);
-      });
+    if (!isNotDelEdge) {
+      this.removeEdges(neighborEdges, isNotEventEmit);
     }
 
     // 删除节点
@@ -524,6 +549,13 @@ class BaseCanvas extends Canvas {
     }
 
     if (_rmNodes.length > 0) {
+      this.emit('system.node.delete', {
+        node: _rmNodes[0]
+      });
+      this.emit('events', {
+        type: 'node:delete',
+        node: _rmNodes[0]
+      });
       return {
         nodes: [_rmNodes[0]],
         edges: neighborEdges,
@@ -573,13 +605,13 @@ class BaseCanvas extends Canvas {
           return _edge === item.id;
         });
       } else {
-        console.log(`删除线条错误，传入参数有误，请检查`);
+        console.warn(`删除线条错误，传入参数有误，请检查`);
         return;
       }
       if (edgeIndex !== -1) {
         result = result.concat(this.edges.splice(edgeIndex, 1));
       } else {
-        console.log(`删除线条错误，不存在值为${_edge.id}的线`);
+        console.warn(`删除线条错误，不存在值为${_edge.id}的线`);
       }
     });
 
@@ -620,6 +652,7 @@ class BaseCanvas extends Canvas {
   }
 
   getNeighborEdges(id, type) {
+
     let node = undefined;
     let group = undefined;
     if (type === 'node') {
@@ -632,6 +665,7 @@ class BaseCanvas extends Canvas {
       group = _.find(this.groups, item => id === item.id);
       group && !type && (type = 'group');
     }
+
     return this.edges.filter((item) => {
       if (type === 'node') {
         return _.get(item, 'sourceNode.id') === node.id || _.get(item, 'targetNode.id') === node.id;
@@ -645,7 +679,7 @@ class BaseCanvas extends Canvas {
     const result = [];
     const node = _.find(this.nodes, item => nodeId === item.id);
     if (!node) {
-      console.log(`找不到id为${nodeId}的节点`);
+      console.warn(`找不到id为${nodeId}的节点`);
     }
     this.edges.forEach((item) => {
       if (item.sourceNode && item.sourceNode.id === nodeId) {
@@ -781,11 +815,11 @@ class BaseCanvas extends Canvas {
         }
       });
     }
-
+    let customOffset = _.get(options, 'offset') || [0, 0];
     let canDisX = canRight - canLeft;
-    let terDisX = this._rootWidth;
+    let terDisX = this._rootWidth - customOffset[0];
     let canDisY = canBottom - canTop;
-    let terDisY = this._rootHeight;
+    let terDisY = this._rootHeight - customOffset[1];
     let scaleX = terDisX / canDisX;
     let scaleY = terDisY / canDisY;
 
@@ -833,8 +867,8 @@ class BaseCanvas extends Canvas {
     let offsetX = (terLeft + terRight - this._rootWidth) / 2;
     let offsetY = (terTop + terBottom - this._rootHeight) / 2;
 
-    offsetX = -offsetX;
-    offsetY = -offsetY;
+    offsetX = -offsetX + customOffset[0];
+    offsetY = -offsetY + customOffset[1];
 
     const time = 500;
     $(this.wrapper).animate({
@@ -866,7 +900,7 @@ class BaseCanvas extends Canvas {
       groups: groupIds
     }, ['node', 'group'], options, callback);
   }
-  focusNodeWithAnimate(param, type = 'node', callback) {
+  focusNodeWithAnimate(param, type = 'node', options, callback) {
     let node = null;
 
     if (_.isFunction(param)) { // 假如传入的是filter，则按照用户自定义的规则来寻找
@@ -902,11 +936,13 @@ class BaseCanvas extends Canvas {
       }
     }
 
+    let customOffset = _.get(options, 'offset') || [0, 0];
+
     const containerW = this._rootWidth;
     const containerH = this._rootHeight;
 
-    const targetY = containerH / 2 - top;
-    const targetX = containerW / 2 - left;
+    const targetY = containerH / 2 - top + customOffset[1];
+    const targetX = containerW / 2 - left + customOffset[0];
 
     const time = 500;
 
@@ -952,8 +988,8 @@ class BaseCanvas extends Canvas {
           scale: this._zoomData
         };
         if (this._coordinateService.originX === undefined || this._coordinateService.originY === undefined) {
-          _canvasInfo['originX'] = 0;
-          _canvasInfo['originY'] = 0;
+          _canvasInfo['originX'] = 50;
+          _canvasInfo['originY'] = 50;
         }
         this._coordinateService._changeCanvasInfo(_canvasInfo);
         this._guidelineService.zoom(this._zoomData);
@@ -963,6 +999,15 @@ class BaseCanvas extends Canvas {
         frame++;
       }, time / 20);
     }
+  }
+
+  setOrigin(data) {
+    let originX = (data[0] || '0').toString().replace('%', '');
+    let originY = (data[1] || '0').toString().replace('%', '');
+    this._coordinateService._changeCanvasInfo({
+      originX: parseFloat(originX),
+      originY: parseFloat(originY)
+    });
   }
 
   move(position) {
@@ -981,8 +1026,12 @@ class BaseCanvas extends Canvas {
     return this._zoomData;
   }
 
-  getMovePosition() {
+  getOffset() {
     return this._moveData;
+  }
+
+  getOrigin() {
+    return [this._coordinateService.originX + '%', this._coordinateService.originY + '%']
   }
 
   getDataMap() {
@@ -1207,10 +1256,19 @@ class BaseCanvas extends Canvas {
       this.setMoveable(true);
     }
 
-    $(window).resize(() => {
+    //  监控画布的resize事件
+    const _resizeObserver = new ResizeObserver(entries => {
       this._rootWidth = $(this.root).width();
       this._rootHeight = $(this.root).height();
+      this._coordinateService._changeCanvasInfo({
+        terOffsetX: $(this.root).offset().left,
+        terOffsetY: $(this.root).offset().top,
+        terWidth: $(this.root).width(),
+        terHeight: $(this.root).height()
+      });
     });
+
+    _resizeObserver.observe(this.root);
 
     // 绑定一大堆事件，group:addMember，groupDragStop，group:removeMember，beforeDetach，connection，
     this.on('InnerEvents', (data) => {
@@ -1227,6 +1285,12 @@ class BaseCanvas extends Canvas {
       } else if (data.type === 'endpoint:drag') {
         this._dragType = 'endpoint:drag';
         this._dragEndpoint = data.data;
+      } else if (data.type === 'node:move') {
+        this._moveNode(data.node, data.x, data.y);
+      } else if (data.type === 'group:move') {
+        this._moveGroup(data.group, data.x, data.y);
+      }  else if (data.type === 'link:click') {
+        this._dragType = 'link:click';
       } else if (data.type === 'multiple:select') {
         const result = this._selectMytiplyItem(data.range);
         // 把框选的加到union的数组
@@ -1331,8 +1395,8 @@ class BaseCanvas extends Canvas {
         $(this.wrapper).prepend(endpointDom);
       }
       endpoint.updatePos();
-      endpoint.mounted && endpoint.mounted();
     }
+    endpoint.mounted && endpoint.mounted();
   }
 
   _attachMouseDownEvent() {
@@ -1694,7 +1758,7 @@ class BaseCanvas extends Canvas {
                 return _result;
               });
               if (_isRepeat) {
-                console.log(`id为${edge.sourceEndpoint.id}-${_targetEndpoint.id}的线条连接重复，请检查`);
+                console.warn(`id为${edge.sourceEndpoint.id}-${_targetEndpoint.id}的线条连接重复，请检查`);
                 edge.destroy();
                 return false;
               }
@@ -1708,7 +1772,7 @@ class BaseCanvas extends Canvas {
             });
             let _isConnect = edge.isConnect ? edge.isConnect() : true;
             if (!_isConnect) {
-              console.log(`id为${edge.sourceEndpoint.id}-${_targetEndpoint.id}的线条无法连接，请检查`);
+              console.warn(`id为${edge.sourceEndpoint.id}-${_targetEndpoint.id}的线条无法连接，请检查`);
               edge.destroy();
               return false;
             }
@@ -1837,7 +1901,7 @@ class BaseCanvas extends Canvas {
                   group: targetGroup
                 });
               } else {
-                console.log(`nodeId为${this._dragNode.id}的节点和groupId${targetGroup.id}的节点组scope值不符，无法加入`);
+                console.warn(`nodeId为${this._dragNode.id}的节点和groupId${targetGroup.id}的节点组scope值不符，无法加入`);
               }
             }
             rmNode._init(nodeData);
@@ -1868,7 +1932,7 @@ class BaseCanvas extends Canvas {
               });
               _updateNeighborEdge(rmNode, neighborEdges);
             } else {
-              console.log(`nodeId为${this._dragNode.id}的节点和groupId${targetGroup.id}的节点组scope值不符，无法加入`);
+              console.warn(`nodeId为${this._dragNode.id}的节点和groupId${targetGroup.id}的节点组scope值不符，无法加入`);
             }
           }
         }
@@ -1933,14 +1997,16 @@ class BaseCanvas extends Canvas {
 
     this.root.addEventListener('mousedown', mouseDownEvent);
     this.root.addEventListener('mousemove', mouseMoveEvent);
-    // this.root.addEventListener('mouseout', mouseEndEvent);
+    // this.root.addEventListener('mouseleave', mouseEndEvent);
     this.root.addEventListener('mouseup', mouseEndEvent);
   }
   _moveNode(node, x, y) {
-    node.moveTo(x, y);
+    node._moveTo(x, y);
     this.edges.forEach((edge) => {
       if (edge.type === 'endpoint') {
-        const isLink = _.find(node.endpoints, point => point.id === edge.sourceEndpoint.id || point.id === edge.targetEndpoint.id);
+        const isLink = _.find(node.endpoints, (point) => {
+          return (point.nodeId === edge.sourceNode.id && point.id === edge.sourceEndpoint.id) || (point.nodeId === edge.targetNode.id && point.id === edge.targetEndpoint.id);
+        });
         isLink && edge.redraw();
       } else if (edge.type === 'node') {
         const isLink = edge.sourceNode.id === node.id || edge.targetNode.id === node.id;
@@ -1949,7 +2015,7 @@ class BaseCanvas extends Canvas {
     });
   }
   _moveGroup(group, x, y) {
-    group.moveTo(x, y);
+    group._moveTo(x, y);
     this.edges.forEach((edge) => {
       let hasUpdate = _.get(edge, 'sourceNode.group') === group.id ||
         _.get(edge, 'targetNode.group') === group.id ||

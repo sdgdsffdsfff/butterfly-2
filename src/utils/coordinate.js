@@ -22,25 +22,25 @@ class CoordinateService {
   }
 
   _changeCanvasInfo(data) {
-    if (data.terOffsetX) {
+    if (data.terOffsetX !== undefined) {
       this.terOffsetX = data.terOffsetX;
     }
-    if (data.terOffsetY) {
+    if (data.terOffsetY !== undefined) {
       this.terOffsetY = data.terOffsetY;
     }
-    if (data.terWidth) {
+    if (data.terWidth !== undefined) {
       this.terWidth = data.terWidth;
     }
-    if (data.terHeight) {
+    if (data.terHeight !== undefined) {
       this.terHeight = data.terHeight;
     }
-    if (data.canOffsetX) {
+    if (data.canOffsetX !== undefined) {
       this.canOffsetX = data.canOffsetX;
     }
-    if (data.canOffsetY) {
+    if (data.canOffsetY !== undefined) {
       this.canOffsetY = data.canOffsetY;
     }
-    if (data.scale) {
+    if (data.scale !== undefined) {
       this._lastScale = this.scale;
       this.scale = data.scale;
     }
@@ -64,13 +64,13 @@ class CoordinateService {
     }
 
     let _isChangeMouse = false;
-    if (data.mouseX) {
+    if (data.mouseX !== undefined) {
       if (this._currentTerX !== data.mouseX - this.terOffsetX) {
         this._currentTerX = (data.mouseX - this.terOffsetX);
         _isChangeMouse = true;
       }
     }
-    if (data.mouseY) {
+    if (data.mouseY !== undefined) {
       if (this._currentTerY !== data.mouseY - this.terOffsetY) {
         this._currentTerY = (data.mouseY - this.terOffsetY);
         _isChangeMouse = true;
@@ -126,8 +126,8 @@ class CoordinateService {
     let canOffsetY = _.get(options, 'canOffsetY') !== undefined ? _.get(options, 'canOffsetY') : this.canOffsetY;
     let terOffsetX = _.get(options, 'terOffsetX') !== undefined ? _.get(options, 'terOffsetX') : this.terOffsetX;
     let terOffsetY = _.get(options, 'terOffsetY') !== undefined ? _.get(options, 'terOffsetY') : this.terOffsetY;
-    let originX = _.get(options, 'originX') !== undefined ? _.get(options, 'originX') : this.originX;
-    let originY = _.get(options, 'originY') !== undefined ? _.get(options, 'originY') : this.originX;
+    let originX = _.get(options, 'originX') !== undefined ? _.get(options, 'originX') : this.originX || 0;
+    let originY = _.get(options, 'originY') !== undefined ? _.get(options, 'originY') : this.originY || 0;
     if (pos === 'x') {
       let transformOriginX  = originX / 100 * this.terWidth;
       return coordinate * scale + (transformOriginX * (1 - scale) + canOffsetX) + terOffsetX;
@@ -144,13 +144,14 @@ class CoordinateService {
     let canOffsetY = _.get(options, 'canOffsetY') !== undefined ? _.get(options, 'canOffsetY') : this.canOffsetY;
     let terOffsetX = _.get(options, 'terOffsetX') !== undefined ? _.get(options, 'terOffsetX') : this.terOffsetX;
     let terOffsetY = _.get(options, 'terOffsetY') !== undefined ? _.get(options, 'terOffsetY') : this.terOffsetY;
-
+    let originX = _.get(options, 'originX') !== undefined ? _.get(options, 'originX') : this.originX || 0;
+    let originY = _.get(options, 'originY') !== undefined ? _.get(options, 'originY') : this.originY || 0;
     if (pos === 'x') {
-      let transformOriginX  = this.originX / 100 * this.terWidth;
+      let transformOriginX  = originX / 100 * this.terWidth;
       return (coordinate - (transformOriginX * (1 - scale) + canOffsetX) - terOffsetX) / scale;
     }
     if (pos === 'y') {
-      let transformOriginY  = this.originY / 100 * this.terHeight;
+      let transformOriginY  = originY / 100 * this.terHeight;
       return (coordinate - (transformOriginY * (1 - scale) + canOffsetY) - terOffsetY) / scale;
     }
   }

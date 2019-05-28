@@ -92,10 +92,16 @@ addNode = (object|Node) => {}
 addEdge = (object|Edge) => {}
 
 /**
-  * 设置放大缩小
-  * @param {true|false} boolean  - 是否支持放大缩小
+  * 删除节点
+  * @param nodeId string  - 节点id
   */
 removeNode = (string) => {}
+
+/**
+  * 批量删除节点
+  * @param nodeIds array  - 批量节点id
+  */
+removeNodes = (array) => {}
 
 /**
   * 根据id删除节点
@@ -135,23 +141,26 @@ setMoveable = (boolean) => {}
   * 聚焦某个节点/节点组
   * @param {string/function} nodeId/groupId or filter  - 节点的id或者过滤器
   * @param {string} type  - 节点的类型(node or group)
+  * @param {object} options {offset: [0,0]}  - 聚焦配置属性，如偏移值
   * @param {function} callback  - 聚焦后的回调
   */
-focusNodeWithAnimate = (string, type) => {}
+focusNodeWithAnimate = (string, type, options, callback) => {}
 
 /**
   * 聚焦某多个节点/节点组
   * @param {object} {nodes: [], groups: []}  - 节点和节点组的id数组
   * @param {array} type  - 节点的类型(node or group)
+  * @param {object} options {offset: [0,0]}  - 聚焦配置属性，如偏移值
   * @param {function} callback  - 聚焦后的回调
   */
-focusNodesWithAnimate = (objs, type) => {}
+focusNodesWithAnimate = (objs, type, options, callback) => {}
 
 /**
   * 聚焦整个画布，会自动调整画布位置和缩放
+  * @param {object} options {offset: [0,0]}  - 聚焦配置属性，如偏移值
   * @param {function} callback  - 聚焦后的回调
   */
-focusCenterWithAnimate = () => {}
+focusCenterWithAnimate = (options, callback) => {}
 
 /**
   * 设置框选模式
@@ -161,10 +170,34 @@ focusCenterWithAnimate = () => {}
 setSelectMode = (boolean, type) => {}
 
 /**
+  * 获取画布的缩放
+  * @return {float} - 画布的缩放(0-1)
+  */
+getZoom = () => {}
+
+/**
+  * 获取画布的偏移值
+  * @return {[x, y]} - 画布的偏移值
+  */
+getOffset = () => {}
+
+/**
+  * 获取画布的偏移值的中心点
+  * @return {[x, y]} - 画布的偏移值的中心点(百分比)
+  */
+getOrigin = () => {}
+
+/**
   * 获取画布的数据模型
   * @return {data} - 画布的数据
   */
-getDataMap = (string) => {}
+getDataMap = () => {}
+
+/**
+  * 手动设置画布缩放的中心点
+  * @param {[x, y]} array  - x,y的中心点坐标
+  */
+setOrigin = ([x ,y]) => {}
 
 /**
   * 手动设置画布偏移
@@ -263,6 +296,11 @@ canvas2terminal = (coordinates) => {}
   */
 save2img = (options) => {}
 
+/**
+  * 当root移动或者大小发生变化时需要更新位置
+  */
+updateRootResize = () => {}
+
 ```
 
 
@@ -281,8 +319,10 @@ canvas.on('type', (data) => {
 | system.canvas.zoom | 画布缩放 | -
 | system.node.delete | 删除节点 | -
 | system.node.move | 移动节点 | -
+| system.nodes.add | 批量节点添加 | -
 | system.link.delete | 删除连线 | -
 | system.link.connect | 连线成功 | -
+| system.link.click | 点击事件 | -
 | system.group.delete | 删除节点组 | -
 | system.group.move | 移动节点组 | -
 | system.group.addMembers | 节点组添加节点 | -
