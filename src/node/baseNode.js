@@ -84,7 +84,11 @@ class BaseNode extends Node {
 
   getEndpoint(pointId, type) {
     return _.find(this.endpoints, (point) => {
-      return pointId === point.id && ((type && type === point.type) || !type);
+      if (point.type) {
+        return pointId === point.id && ((type && type === point.type) || !type);
+      } else {
+        return pointId === point.id;
+      }
     });
   }
 
@@ -174,14 +178,18 @@ class BaseNode extends Node {
       });
     });
 
-    if (this.draggable) {
+    this.setDraggable(this.draggable);
+  }
+  setDraggable(draggable) {
+    if (draggable === false) {
+      $(this.dom).off('mousedown');
+    } else {
       $(this.dom).on('mousedown', (e) => {
         const LEFT_KEY = 0;
         if (e.button !== LEFT_KEY) {
           return;
         }
         e.preventDefault();
-        // e.stopPropagation();
         this._isMoving = true;
         this._emit('InnerEvents', {
           type: 'node:dragBegin',
@@ -189,6 +197,7 @@ class BaseNode extends Node {
         });
       });
     }
+    this.draggable = draggable;
   }
   remove() {
     this._emit('InnerEvents', {

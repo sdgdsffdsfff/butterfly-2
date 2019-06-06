@@ -692,6 +692,104 @@ class BaseCanvas extends Canvas {
     return result.map(id => this.getNode(id));
   }
 
+  /**
+   * 查找 N 层节点
+   * 
+   * @param {Object} options 
+   * @param {Node} options.node
+   * @param {Endpoint} options.endpoint
+   * @param {String} options.type
+   * @param {Number} options.level
+   * @param {Function} options.iteratee
+   * @returns {Object} filteredGraph
+   */
+  getNeighborNodesAndEdgesByLevel({node, endpoint, type = 'out', level = Infinity, iteratee = () => true}) {
+    // 先求source-target level 层
+    if (!node || !this.nodes.length) return [];
+    if (level == 0 || !this.edges.length) return [node];
+    let quene = [];
+    let neighbors = [];
+    const visited = new Set();
+    
+    // 1. 生成邻接表
+    // adjTable = {[nodeId]: {[endpointId]: [[targetNode, targetEndpoint]]}}
+    const adjTable = this.getAdjcentTable(type);
+
+    if (endpoint) {
+      quene = _.get(adjTable, [node.id, endpoint.id], []).map(d => [...d, 1]);
+    } else {
+      quene = (Object.values(_.get(adjTable, node.id, {})) || []).flatMap(d => d.map(n => n.concat(1)));
+    }
+
+    visited.add(node.id);
+
+    if (!quene.length) return [node];
+    // 2. BFS,得到 nodes 集合
+    while(quene.length) {
+      const [$node, $endpoint, $level] = quene.shift();
+      if (
+        visited.has($node.id) ||
+        $level > level ||
+        !iteratee($node, $endpoint, $level)
+      ) continue;
+
+      // TODO: 锚点向后传递？节点向后传递？
+      neighbors = (Object.values(_.get(adjTable, $node.id, {})) || []).forEach((neighborsWithEndpoint) => {
+        neighborsWithEndpoint.forEach(neighbor => {
+          const [$nNode, $nEndpoint] = neighbor;
+          if (visited.has($nNode.id)) return;
+          quene.push([...neighbor, $level + 1]);
+        });
+      });
+      visited.add($node.id);
+    }
+    const nodes = new Set();
+    const edges = new Set();
+    // 4. 获取 edges，1. 只考虑点集 2. 考虑边
+    // 目前只考虑点集内的全部边
+    this.edges.forEach(edge => {
+      const { sourceNode, sourceEndpoint, targetNode, targetEndpoint } = edge;
+      if (visited.has(sourceNode.id) &&  visited.has(targetNode.id)) {
+        nodes.add(sourceNode);
+        nodes.add(targetNode);
+        edges.add(edge);
+      }
+    });
+
+    return {
+      nodes: [...nodes],
+      edges: [...edges]
+    }
+  }
+
+  getAdjcentTable(type) {
+    // 包含正逆的邻接表
+    const adjTable = {};
+    this.edges.forEach(edge => {
+      const { sourceNode, sourceEndpoint, targetNode, targetEndpoint } = edge;
+      const sourceNodeId = sourceNode.id;
+      const sourceEndpointId = sourceEndpoint.id;
+      const targetNodeId = targetNode.id;
+      const targetEndpointId = targetEndpoint.id;
+      // in and all
+      if (type !== 'out') {
+        if (!adjTable[targetNodeId]) adjTable[targetNodeId] = {};
+        if (!adjTable[targetNodeId][targetEndpointId]) adjTable[targetNodeId][targetEndpointId] = [];
+  
+        adjTable[targetNodeId][targetEndpointId].push([sourceNode, sourceEndpoint]);
+      }
+      // out and all
+      if (type !== 'in') {
+        if (!adjTable[sourceNodeId]) adjTable[sourceNodeId] = {};
+        if (!adjTable[sourceNodeId][sourceEndpointId]) adjTable[sourceNodeId][sourceEndpointId] = [];
+  
+        adjTable[sourceNodeId][sourceEndpointId].push([targetNode, targetEndpoint]);
+      }
+
+    });
+    return adjTable;
+  }
+
   setZoomable(flat) {
     if (!this._zoomCb) {
       this._zoomCb = (event) => {
@@ -1544,7 +1642,11 @@ class BaseCanvas extends Canvas {
           const endX = this._coordinateService._terminal2canvas('x', event.clientX);
           const endY = this._coordinateService._terminal2canvas('y', event.clientY);
 
-          if (this._dragEndpoint.type === 'source') {
+          // 明确标记source或者是没有type且没有线连上
+          let _isSourceEndpoint = (this._dragEndpoint.type === 'source' || (!this._dragEndpoint.type && (!this._dragEndpoint._tmpType || this._dragEndpoint._tmpType === 'source')));
+          let _isTargetEndpoint = (this._dragEndpoint.type === 'target' || (!this._dragEndpoint.type && this._dragEndpoint._tmpType === 'target'));
+          
+          if (_isSourceEndpoint) {
             let unionKeys = this._findUnion('endpoints', this._dragEndpoint);
             
             let edges = [];
@@ -1622,7 +1724,7 @@ class BaseCanvas extends Canvas {
               dragEndpoint: this._dragEndpoint,
               dragEdges: edges
             });
-          } else {
+          } else if (_isTargetEndpoint) {
             // 从后面搜索线
             let targetEdge = null;
             for (let i = this.edges.length - 1; i >= 0; i--) {
@@ -1683,7 +1785,6 @@ class BaseCanvas extends Canvas {
           let _newWidth = canvasX - this._dragGroup.left;
           let _newHeight = canvasY - this._dragGroup.top;
           this._dragGroup.setSize(_newWidth, _newHeight);
-
         }
       }
     };
@@ -1719,9 +1820,8 @@ class BaseCanvas extends Canvas {
         });
 
         let isDestoryEdges = false;
-
-        // 找不到点 或者 目标节点不是target 
-        if (!_targetEndpoint || _targetEndpoint.type !== 'target') {
+        // 找不到点 或者 目标节点不是target
+        if (!_targetEndpoint || _targetEndpoint.type === 'source' || _targetEndpoint._tmpType === 'source') {
           isDestoryEdges = true;
         }
 
@@ -1740,6 +1840,21 @@ class BaseCanvas extends Canvas {
               edge.destroy(!edge._isDeletingEdge);
             }
           });
+          // 把endpoint重新赋值
+          this._dragEdges.forEach((_rmEdge) => {
+            if (_.get(_rmEdge, 'sourceEndpoint._tmpType') === 'source') {
+              let isExistEdge = _.some(this.edges, (edge) => {
+                return _rmEdge.sourceEndpoint.id === edge.sourceEndpoint.id;
+              });
+              !isExistEdge && (_rmEdge.sourceEndpoint._tmpType = undefined);
+            }
+            if (_.get(_rmEdge, 'targetEndpoint._tmpType') === 'target') {
+              let isExistEdge = _.some(this.edges, (edge) => {
+                return _rmEdge.targetEndpoint.id === edge.targetEndpoint.id;
+              });
+              !isExistEdge && (_rmEdge.targetEndpoint._tmpType = undefined);
+            }
+          });
         } else {
           let _emitEdges = this._dragEdges.filter((edge) => {
 
@@ -1753,6 +1868,10 @@ class BaseCanvas extends Canvas {
 
                 if (_targetEndpoint.nodeId) {
                   _result = _result && (_targetEndpoint.nodeId === _edge.targetNode.id && _targetEndpoint.id === _edge.targetEndpoint.id);
+                }
+
+                if (_result && edge._isDeletingEdge) {
+                  _result = false;
                 }
 
                 return _result;
@@ -1785,6 +1904,14 @@ class BaseCanvas extends Canvas {
               this.edges.push(edge);
             }
 
+            // 把endpoint重新赋值
+            if (edge.type === 'endpoint' && !_.get(edge, 'sourceEndpoint.type') && !_.get(edge, 'sourceEndpoint._tmpType')) {
+              edge.sourceEndpoint._tmpType = 'source';
+            }
+            if (edge.type === 'endpoint' && !_.get(edge, 'targetEndpoint.type') && !_.get(edge, 'targetEndpoint._tmpType')) { 
+              edge.targetEndpoint._tmpType = 'target';
+            }
+            
             return edge;
           });
           if (_emitEdges.length !== 0) {
