@@ -11,14 +11,23 @@ let canvas = new Canvas({
   disLinkable: true,       //节点可取消连接(可传)
   theme: {                 //主题定制(可传) 
     edge: {
-      type: 'Bezier',      //线条默认类型：贝塞尔曲线，折线，直线。分别为Bezier/Flow/Straight
+      type: 'Bezier',      //线条默认类型：贝塞尔曲线，折线，直线，曼哈顿路由线，更美丽的贝塞尔曲线。分别为Bezier/Flow/Straight/Manhattan/AdvancedBezier
       label: 'test',       //线条默认label
       arrow: true,         //线条默认是否带箭头
+      arrowPosition: 0.5,  //箭头位置(0 ~ 1)
+      arrowOffset: 0.0,    //箭头偏移
       Class: XXClass,      //自己拓展的class,拖动连线的时候会采用该拓展类
       isExpandWidth: false //增加线条交互区域
     },
     endpoint: {
-      position: []         //限制锚点位置['Top', 'Bottom', 'Left', 'Right']
+      position: []         //限制锚点位置['Top', 'Bottom', 'Left', 'Right'],
+      linkableHighlight: true //连线时会触发point.linkable的方法，可做高亮
+      expendArea: {        //锚点过小时，可扩大连线热区
+        left: 10,
+        right: 10,
+        top: 10,
+        botton: 10
+      }
     },
     zoomGap: 0.001         //鼠标放大缩小间隙设置
   },
@@ -270,6 +279,13 @@ justifyCoordinate = () => {}
   * @param {array} options - 辅助线的定制化参数
   */
 setGuideLine = (show, options) => {}
+
+/**
+  * 设置缩略图
+  * @param {true|false} boolean  - 是否开启辅助线功能
+  * @param {Object} 具体请参考缩略图章节
+  /
+setMinimap = (show, options) => {}
 
 /**
   * 屏幕转换为画布的坐标
