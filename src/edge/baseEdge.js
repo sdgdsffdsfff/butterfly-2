@@ -2,9 +2,10 @@
 
 const _ = require('lodash');
 const $ = require('jquery');
-const DrawUtil = require('../utils/link');
-const ArrowUtil = require('../utils/arrow');
-require('./baseEdge.less');
+import DrawUtil from '../utils/link';
+import ArrowUtil from '../utils/arrow';
+
+import './baseEdge.less';
 
 class Edge {
   constructor(opts) {
@@ -15,7 +16,7 @@ class Edge {
     this.sourceNode = _.get(opts, 'sourceNode');
     this._sourceType = _.get(opts, '_sourceType');
     this.sourceEndpoint = _.get(opts, 'sourceEndpoint');
-    this.type = _.get(opts, 'type');
+    this.type = _.get(opts, 'type') || 'endpoint';
     this.orientationLimit = _.get(opts, 'orientationLimit');
     this.shapeType = _.get(opts, 'shapeType');
     this.label = _.get(opts, 'label');
@@ -241,4 +242,4 @@ class Edge {
   }
 }
 
-module.exports = Edge;
+export default Edge;

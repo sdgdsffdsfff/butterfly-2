@@ -1,15 +1,15 @@
 'use strict';
 
-require('./baseGroup.less');
+import './baseGroup.less';
 
 const $ = require('jquery');
 const _ = require('lodash');
 
-const Group = require('../interface/group');
-const Endpoint = require('../endpoint/baseEndpoint');
+import Group from '../interface/group';
+import Endpoint from '../endpoint/baseEndpoint';
 
 // scope的比较
-const ScopeCompare = require('../utils/scopeCompare');
+import ScopeCompare from '../utils/scopeCompare';
 
 class BaseGroup extends Group {
   constructor(opts) {
@@ -72,16 +72,16 @@ class BaseGroup extends Group {
       this.setResize(true);
     }
 
-    if (obj.top) {
+    if (obj.top !== undefined) {
       group.css('top', obj.top + 'px');
     }
-    if (obj.left) {
+    if (obj.left !== undefined) {
       group.css('left', obj.left + 'px');
     }
-    if (obj.width) {
+    if (obj.width !== undefined) {
       group.css('width', obj.width + 'px');
     }
-    if (obj.height) {
+    if (obj.height !== undefined) {
       group.css('height', obj.height + 'px');
     }
 
@@ -295,4 +295,4 @@ class BaseGroup extends Group {
   }
 }
 
-module.exports = BaseGroup;
+export default BaseGroup;
